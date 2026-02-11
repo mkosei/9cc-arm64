@@ -15,6 +15,10 @@ typedef enum {
 
 typedef struct  Node Node;
 
+Node *expr();
+Node *mul();
+Node *primary();
+
 struct Node
 {
   Nodekind kind;
@@ -108,7 +112,7 @@ Token *tokenize(char *p) {
       p++;
       continue;
     }
-    if (*p == '+' || *p == '-') {
+    if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')') {
       cur = new_token(TK_RESERVED, cur, p++);
       continue;
     }
@@ -117,14 +121,14 @@ Token *tokenize(char *p) {
       cur->val = strtol(p, &p, 10);
       continue;
     }
-    error(token->str, "トークナイズできません");
+    error(p, "トークナイズできません");
   }
   new_token(TK_EOF, cur, p);
   return head.next;
 }
 
 Node *new_node(Nodekind kind, Node *lhs, Node *rhs) {
-  Node *node = calloc(1, sizeof(node));
+  Node *node = calloc(1, sizeof(*node));
   node->kind = kind;
   node->lhs = lhs;
   node->rhs = rhs;
@@ -132,11 +136,12 @@ Node *new_node(Nodekind kind, Node *lhs, Node *rhs) {
 }
 
 Node *new_node_num(int val) {
-  Node *node = calloc(1, sizeof(node)); 
+  Node *node = calloc(1, sizeof(*node)); 
   node->kind = ND_NUM;
   node->val = val;
   return node;
 }
+
 
 Node *expr() {
   Node *node = mul();
@@ -172,28 +177,80 @@ Node *primary() {
 }
 
 
+void gen(Node *node) {
+  if (node->kind == ND_NUM) {
+    printf("  mov x0, #%d\n", node->val);
+    printf("  STR x0, [sp, #-16]!\n");
+    return;
+  }
+
+  gen(node->lhs);
+  gen(node->rhs);
+
+  printf("  LDR x1, [sp], #16\n");
+  printf("  LDR x0, [sp], #16\n");
+
+
+  // switch (node->kind) {
+  //   case ND_ADD:
+  //     printf("  add x0, x0, #%d\n");
+  //     break;
+  //   case ND_SUB:
+  //     printf("  sub x0, x0, #%d\n"); 
+  //     break;
+  //   case ND_MUL:
+  //     printf("  mul x0, x0, #%d\n");  
+  //     break;
+  //   case ND_DIV:
+  //     printf("  sdiv x0, x0, #%d\n"); 
+  //     break;
+  // }
+  switch (node->kind) {
+    case ND_ADD:
+      printf("  add x0, x0, x1\n");
+      break;
+    case ND_SUB:
+      printf("  sub x0, x0, x1\n");
+      break;
+    case ND_MUL:
+      printf("  mul x0, x0, x1\n");
+      break;
+    case ND_DIV:
+      printf("  sdiv x0, x0, x1\n");
+      break;
+  }
+
+
+  printf("  STR x0, [sp, #-16]!\n");
+}
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     fprintf(stderr, "引数の個数が正しくありません\n");
     return 1;
   }
 
-  token = tokenize(argv[1]);
-
+  user_input = argv[1];
+  token = tokenize(user_input);
+  Node *node = expr();
 
   printf(".globl _main\n");
   printf("_main:\n");
-  printf("  mov x0, #%d\n", expect_number());
+  //printf("  mov x0, #%d\n", expect_number());
 
-  while(!at_eof()) {
-    if(consume('+')) {
-      printf("  add x0, x0, #%d\n", expect_number());
-      continue;
-    }
-    expect('-');
-    printf("  sub x0, x0, #%d\n", expect_number());
-  }
+  gen(node);
+  
 
+  // while(!at_eof()) {
+  //   if(consume('+')) {
+  //     printf("  add x0, x0, #%d\n", expect_number());
+  //     continue;
+  //   }
+  //   expect('-');
+  //   printf("  sub x0, x0, #%d\n", expect_number());
+  // }
+ 
+  printf("  LDR x0, [sp], #16\n");
   printf("  ret\n");
   return 0;
 }
