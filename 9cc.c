@@ -296,6 +296,35 @@ void gen(Node *node) {
     case ND_DIV:
       printf("  sdiv x0, x0, x1\n");
       break;
+    case ND_EQ:
+      printf("  cmp x0, x1\n");
+      printf("  cset x0, eq\n");
+      break;
+
+    case ND_NE:
+      printf("  cmp x0, x1\n");
+      printf("  cset x0, ne\n");
+      break;
+
+    case ND_R: 
+      printf("  cmp x0, x1\n");
+      printf("  cset x0, lt\n");
+      break;
+
+    case ND_L: 
+      printf("  cmp x0, x1\n");
+      printf("  cset x0, gt\n");
+      break;
+
+    case ND_RE: 
+      printf("  cmp x0, x1\n");
+      printf("  cset x0, le\n");
+      break;
+
+    case ND_LE: 
+      printf("  cmp x0, x1\n");
+      printf("  cset x0, ge\n");
+      break;
   }
 
 
