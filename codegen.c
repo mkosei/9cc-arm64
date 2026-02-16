@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static int label_idx = 0;
+
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR) {
     fprintf(stderr, "代入の左辺値が変数じゃありません\n");
@@ -14,9 +16,25 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
-
   switch (node->kind) {
-
+  case ND_IF: {
+    int idx = label_idx++;
+    gen(node->lhs);
+    printf("  ldr x0, [sp], #16\n");
+    printf("  cmp x0, #0\n");
+    if (node->els) {
+      printf("  beq Lelse%d\n", idx);
+      gen(node->rhs);
+      printf("  b Lend%d\n", idx);
+      printf("Lelse%d:\n", idx);
+      gen(node->els);
+    } else {
+      printf("  beq Lend%d\n", idx);
+      gen(node->rhs);
+    }
+    printf("Lend%d:\n", idx);
+    return;
+  }
   case ND_RETURN:
     gen(node->lhs);
     printf("  ldr x0, [sp], #16\n");
@@ -42,7 +60,7 @@ void gen(Node *node) {
     return;
 
   case ND_ASSIGN:
-    gen_lval(node->lhs); 
+    gen_lval(node->lhs);
     gen(node->rhs);
     printf("  ldr x1, [sp], #16\n");
     printf("  ldr x0, [sp], #16\n");
@@ -112,4 +130,3 @@ void gen(Node *node) {
 
   printf("  str x0, [sp, #-16]!\n");
 }
-

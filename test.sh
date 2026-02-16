@@ -16,8 +16,13 @@ assert() {
   fi
 }
 
-
 assert 8 "a=3; b=5; return a + b;"
+# if 文
+assert 1 "if (1) return 1; return 0;"
+assert 0 "if (0) return 1; return 0;"
+
+# if-else 文
+assert 1 "if (1) return 1; else return 0;"
+assert 0 "if (0) return 1; else return 0;"
 
 echo OK
-

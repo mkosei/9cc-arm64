@@ -1,4 +1,5 @@
 #include "9cc.h"
+#include <_stdio.h>
 #include <alloca.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -9,7 +10,6 @@
 extern Token *token;
 extern char *user_input;
 LVar *locals = NULL;
-
 
 void error(char *loc, char *fmt, ...) {
   va_list ap;
@@ -107,18 +107,25 @@ Token *tokenize(char *p) {
       cur->len = 1;
       continue;
     }
-    // if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
-    //   int i = 0;
-    //   tokens[i].kind = TK_RETURN;
-    //   tokens[i].str = p;
-    //   i++;
-    //   p += 6;
-    //   continue;
-    // }
+
     if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
       cur = new_token(TK_RETURN, cur, p);
       cur->len = 6;
       p += 6;
+      continue;
+    }
+
+    if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
+      cur = new_token(TK_IF, cur, p);
+      cur->len = 2;
+      p += 2;
+      continue;
+    }
+
+    if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
+      cur = new_token(TK_ELSE, cur, p);
+      cur->len = 4;
+      p += 4;
       continue;
     }
 
@@ -183,14 +190,28 @@ Node *stmt() {
   if (token->kind == TK_RETURN) {
     token = token->next;
     node = new_node(ND_RETURN, expr(), NULL);
-  } else {
-    node = expr();
+    expect(';');
+    return node;
   }
 
+  if (token->kind == TK_IF) {
+    token = token->next;
+    Node *cond = expr();
+    Node *then = stmt();
+    Node *els = NULL;
+    if (token->kind == TK_ELSE) {
+      token = token->next;
+      els = stmt();
+    }
+    node = new_node(ND_IF, cond, then);
+    node->els = els;
+    return node;
+  }
+
+  node = expr();
   expect(';');
   return node;
 }
-
 
 void program() {
   int i = 0;
@@ -198,7 +219,6 @@ void program() {
     code[i++] = stmt();
   code[i] = NULL;
 }
-
 
 Node *equality() {
   Node *node = relational();
@@ -278,7 +298,7 @@ Node *primary() {
   //   }
   //   return node;
   // }
-  
+
   Token *tok = consume_ident();
   if (tok) {
     Node *node = calloc(1, sizeof(Node));
@@ -304,7 +324,6 @@ Node *primary() {
 
     return node;
   }
-
 
   return new_node_num(expect_number());
 }
