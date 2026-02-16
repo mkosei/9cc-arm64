@@ -1,5 +1,4 @@
 #include "9cc.h"
-#include <_stdio.h>
 #include <alloca.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -9,6 +8,8 @@
 
 extern Token *token;
 extern char *user_input;
+LVar *locals = NULL;
+
 
 void error(char *loc, char *fmt, ...) {
   va_list ap;
@@ -53,6 +54,11 @@ int expect_number() {
 
 bool at_eof() { return token->kind == TK_EOF; }
 
+int is_alnum(char c) {
+  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') ||
+         ('0' <= c && c <= '9') || (c == '_');
+}
+
 Token *new_token(TokenKind kind, Token *cur, char *str) {
   Token *tok = calloc(1, sizeof(Token));
   tok->kind = kind;
@@ -72,7 +78,7 @@ Token *tokenize(char *p) {
       continue;
     }
     if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' ||
-        *p == ')') {
+        *p == ')' || *p == ';') {
       cur = new_token(TK_RESERVED, cur, p++);
       cur->len = 1;
       continue;
@@ -89,16 +95,42 @@ Token *tokenize(char *p) {
       p += 2;
       continue;
     }
+    if (*p == '=') {
+      cur = new_token(TK_RESERVED, cur, p);
+      cur->len = 1;
+      p++;
+      continue;
+    }
+
     if (*p == '<' || *p == '>') {
       cur = new_token(TK_RESERVED, cur, p++);
       cur->len = 1;
       continue;
     }
-    if ('a' <= *p && *p <= 'z') {
-      cur = new_token(TK_IDENT, cur, p++);
-      cur->len = 1;
+    // if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+    //   int i = 0;
+    //   tokens[i].kind = TK_RETURN;
+    //   tokens[i].str = p;
+    //   i++;
+    //   p += 6;
+    //   continue;
+    // }
+    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_RETURN, cur, p);
+      cur->len = 6;
+      p += 6;
       continue;
     }
+
+    if (isalpha(*p)) {
+      char *q = p;
+      while (is_alnum(*p))
+        p++;
+      cur = new_token(TK_IDENT, cur, q);
+      cur->len = p - q;
+      continue;
+    }
+
     error(p, "トークナイズできません");
   }
   new_token(TK_EOF, cur, p);
@@ -112,6 +144,14 @@ Token *consume_ident() {
   Token *t = token;
   token = token->next;
   return t;
+}
+
+LVar *find_lvar(Token *tok) {
+  for (LVar *var = locals; var; var = var->next) {
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  }
+  return NULL;
 }
 
 Node *new_node(Nodekind kind, Node *lhs, Node *rhs) {
@@ -139,10 +179,18 @@ Node *assign() {
 Node *expr() { return assign(); }
 
 Node *stmt() {
-  Node *node = expr();
+  Node *node;
+  if (token->kind == TK_RETURN) {
+    token = token->next;
+    node = new_node(ND_RETURN, expr(), NULL);
+  } else {
+    node = expr();
+  }
+
   expect(';');
   return node;
 }
+
 
 void program() {
   int i = 0;
@@ -150,6 +198,7 @@ void program() {
     code[i++] = stmt();
   code[i] = NULL;
 }
+
 
 Node *equality() {
   Node *node = relational();
@@ -165,16 +214,17 @@ Node *equality() {
 
 Node *relational() {
   Node *node = add();
+
   for (;;) {
     if (consume("<"))
-      node = new_node(ND_R, node, add());
-    else if (consume("<=")) {
-      node = new_node(ND_RE, node, add());
-    } else if (consume(">")) {
-      node = new_node(ND_L, node, add());
-    } else if (consume(">=")) {
+      node = new_node(ND_LT, node, add());
+    else if (consume("<="))
       node = new_node(ND_LE, node, add());
-    } else
+    else if (consume(">"))
+      node = new_node(ND_GT, node, add());
+    else if (consume(">="))
+      node = new_node(ND_GE, node, add());
+    else
       return node;
   }
 }
@@ -210,13 +260,51 @@ Node *primary() {
     return node;
   }
 
+  // Token *tok = consume_ident();
+  // if (tok) {
+  //   Node *node = calloc(1, sizeof(Node));
+  //   node->kind = ND_LVAR;
+  //   LVar *lvar = find_lvar(tok);
+  //   if (lvar) {
+  //     lvar->offset = node->offset;
+  //   } else {
+  //     lvar = calloc(1, sizeof(LVar));
+  //     lvar->next = locals;
+  //     lvar->name = tok->str;
+  //     lvar->len = tok->len;
+  //     lvar->offset = locals->offset + 8;
+  //     node->offset = lvar->offset;
+  //     locals = lvar;
+  //   }
+  //   return node;
+  // }
+  
   Token *tok = consume_ident();
   if (tok) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
-    node->offset = (tok->str[0] - 'a' + 1) * 8;
+
+    LVar *lvar = find_lvar(tok);
+    if (lvar) {
+      node->offset = lvar->offset;
+    } else {
+      lvar = calloc(1, sizeof(LVar));
+      lvar->next = locals;
+      lvar->name = tok->str;
+      lvar->len = tok->len;
+
+      if (locals)
+        lvar->offset = locals->offset + 8;
+      else
+        lvar->offset = 8;
+
+      node->offset = lvar->offset;
+      locals = lvar;
+    }
+
     return node;
   }
+
 
   return new_node_num(expect_number());
 }

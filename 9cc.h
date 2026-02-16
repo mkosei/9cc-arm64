@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+
+#define MAX_CODE 1000
+#define MAX_INDEX 100
+
 typedef enum {
   ND_ADD,
   ND_SUB,
@@ -10,13 +14,14 @@ typedef enum {
   ND_DIV,
   ND_EQ,
   ND_NE,
-  ND_L,
-  ND_R,
+  ND_LT,
+  ND_GT,
   ND_LE,
-  ND_RE,
+  ND_GE,
   ND_NUM,
   ND_ASSIGN,
   ND_LVAR,
+  ND_RETURN,
 } Nodekind;
 
 typedef struct Node Node;
@@ -34,6 +39,7 @@ typedef enum {
   TK_IDENT,
   TK_NUM,
   TK_EOF,
+  TK_RETURN,
 } TokenKind;
 
 typedef struct Token Token;
@@ -46,8 +52,22 @@ struct Token {
   int len;
 };
 
+typedef struct LVar LVar;
+
+struct LVar {
+  LVar *next;
+  char *name;
+  int len;
+  int offset;
+};
+
+LVar *locals;
+
 extern Token *token;
 extern char *user_input;
+extern Node *code[MAX_CODE];
+extern Token tokens[MAX_INDEX];
+
 
 Node *stmt(void);
 Node *expr(void);
@@ -63,8 +83,5 @@ Token *tokenize(char *p);
 void gen(Node *node);
 void error(char *loc, char *fmt, ...);
 void program();
-
-#define MAX_CODE 1000
-Node *code[MAX_CODE];
 
 #endif

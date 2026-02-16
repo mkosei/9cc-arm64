@@ -8,6 +8,9 @@
 
 Token *token;
 char *user_input;
+Node *code[MAX_CODE];
+Token tokens[MAX_INDEX];
+
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -19,8 +22,6 @@ int main(int argc, char **argv) {
   token = tokenize(user_input);
 
   program();
-
-  Node *node = expr();
 
   printf(".globl _main\n");
   printf("_main:\n");
