@@ -22,6 +22,7 @@ typedef enum {
   ND_LVAR,
   ND_RETURN,
   ND_IF,
+  ND_FOR,
 } Nodekind;
 
 typedef struct Node Node;
@@ -30,7 +31,13 @@ struct Node {
   Nodekind kind;
   Node *lhs;
   Node *rhs;
+  // if,for,while
   Node *els;
+  Node *init;
+  Node *inc;
+  Node *brk_label;
+  Node *cont_label;
+  //
   int val;
   int offset;
 };
@@ -40,9 +47,7 @@ typedef enum {
   TK_IDENT,
   TK_NUM,
   TK_EOF,
-  TK_RETURN,
-  TK_IF,
-  TK_ELSE,
+  TK_KEYWORD,
 } TokenKind;
 
 typedef struct Token Token;
