@@ -25,4 +25,8 @@ assert 0 "if (0) return 1; return 0;"
 assert 1 "if (1) return 1; else return 0;"
 assert 0 "if (0) return 1; else return 0;"
 
+#for-while　文
+assert 3 "i=0; while(i<3) i=i+1; return i;"
+assert 3 "for(i=0;i<3;i=i+1); return i;"
+
 echo OK

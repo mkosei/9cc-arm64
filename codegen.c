@@ -3,10 +3,11 @@
 #include <stdlib.h>
 
 static int label_idx = 0;
+static int count = 0;
 
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR) {
-    fprintf(stderr, "代入の左辺値が変数じゃありません\n");
+    fprintf(stderr, "代入の左辺値が変数ではありません\n");
     exit(1);
   }
 
@@ -15,38 +16,71 @@ void gen_lval(Node *node) {
   printf("  str x0, [sp, #-16]!\n");
 }
 
-void gen(Node *node) {
+void gen_stmt(Node *node) {
   switch (node->kind) {
-  case ND_IF: {
-    int idx = label_idx++;
-    gen(node->lhs);
-    printf("  ldr x0, [sp], #16\n");
-    printf("  cmp x0, #0\n");
-    if (node->els) {
-      printf("  beq Lelse%d\n", idx);
-      gen(node->rhs);
-      printf("  b Lend%d\n", idx);
-      printf("Lelse%d:\n", idx);
-      gen(node->els);
-    } else {
-      printf("  beq Lend%d\n", idx);
-      gen(node->rhs);
-    }
-    printf("Lend%d:\n", idx);
-    return;
-  }
   case ND_RETURN:
-    gen(node->lhs);
+    gen_expr(node->lhs);
     printf("  ldr x0, [sp], #16\n");
     printf("  mov sp, x29\n");
     printf("  ldp x29, x30, [sp], #16\n");
     printf("  ret\n");
     return;
+  case ND_IF: {
+    int idx = label_idx++;
+    gen_expr(node->lhs);
+    printf("  ldr x0, [sp], #16\n");
+    printf("  cmp x0, #0\n");
+    if (node->els) {
+      printf("  beq Lelse%d\n", idx);
+      gen_stmt(node->rhs);
+      printf("  b Lend%d\n", idx);
+      printf("Lelse%d:\n", idx);
+      gen_stmt(node->els);
+    } else {
+      printf("  beq Lend%d\n", idx);
+      gen_stmt(node->rhs);
+    }
+    printf("Lend%d:\n", idx);
+    return;
+  }
 
-    printf("  mov x0, #%d\n", node->val);
-    printf("  str x0, [sp, #-16]!\n");
+  case ND_FOR: {
+    int c = count++;
+    if (node->init) {
+      gen_stmt(node->init);
+    }
+    printf("Lbegin%d:\n", c);
+    if (node->cond) {
+      gen_expr(node->cond);
+      printf("  ldr x0, [sp], #16\n");
+      printf("  cmp x0, #0\n");
+      printf("  beq %s\n", node->brk_label);
+    }
+    gen_stmt(node->then);
+    printf("%s:\n", node->cont_label);
+
+    if (node->inc) {
+      gen_expr(node->inc);
+    }
+    printf("  b Lbegin%d\n", c);
+    printf("%s:\n", node->brk_label);
+    return;
+  }
+  case ND_BLOCK:
+    for (int i = 0; i < node->body_len; i++) {
+      gen_stmt(node->body[i]);
+    }
     return;
 
+  default:
+    gen_expr(node);
+    printf("  ldr x0, [sp], #16\n");
+    return;
+  }
+}
+
+void gen_expr(Node *node) {
+  switch (node->kind) {
   case ND_NUM:
     printf("  mov x0, #%d\n", node->val);
     printf("  str x0, [sp, #-16]!\n");
@@ -60,20 +94,22 @@ void gen(Node *node) {
     return;
 
   case ND_ASSIGN:
+    gen_expr(node->rhs);
     gen_lval(node->lhs);
-    gen(node->rhs);
-    printf("  ldr x1, [sp], #16\n");
+
     printf("  ldr x0, [sp], #16\n");
+    printf("  ldr x1, [sp], #16\n");
     printf("  str x1, [x0]\n");
     printf("  str x1, [sp, #-16]!\n");
     return;
+
+  default:
+    gen_expr(node->lhs);
+    gen_expr(node->rhs);
+
+    printf("  ldr x1, [sp], #16\n");
+    printf("  ldr x0, [sp], #16\n");
   }
-
-  gen(node->lhs);
-  gen(node->rhs);
-
-  printf("  ldr x1, [sp], #16\n");
-  printf("  ldr x0, [sp], #16\n");
 
   switch (node->kind) {
 
@@ -122,10 +158,6 @@ void gen(Node *node) {
     printf("  cmp x0, x1\n");
     printf("  cset x0, ge\n");
     break;
-
-  default:
-    fprintf(stderr, "未対応のノード種別\n");
-    exit(1);
   }
 
   printf("  str x0, [sp, #-16]!\n");

@@ -37,8 +37,26 @@ bool consume(const char *op) {
   return true;
 }
 
+bool equal(Token *tok, const char *op) {
+
+  if (!tok)
+    return false;
+
+  int len = strlen(op);
+  return tok->len == len && strncmp(tok->str, op, len) == 0;
+}
+
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
 // それ以外の場合にはエラーを報告する。
+// void expect(char op) {
+//   char buf[2] = {op, '\0'};
+//
+//   if (!equal(token, buf))
+//     error(token->str, "'%c'ではありません", op);
+//
+//   token = token->next;
+// }
+
 void expect(const char op) {
   if (token->kind != TK_RESERVED || token->str[0] != op) {
     error(token->str, "'%c'ではありません", op);
@@ -55,15 +73,6 @@ int expect_number() {
   return val;
 }
 
-bool equal(Token *tok, const char *op) {
-
-  if (!tok)
-    return false;
-
-  int len = strlen(op);
-  return tok->len == len && strncmp(tok->str, op, len) == 0;
-}
-
 bool at_eof() { return token->kind == TK_EOF; }
 
 int is_alnum(char c) {
@@ -76,7 +85,7 @@ static char *new_unique_name(void) {
   char *buf = malloc(32);
   if (!buf)
     return NULL;
-  sprintf(buf, ".L..%d", id++);
+  snprintf(buf, 32, ".L%d", id++);
   return buf;
 }
 
@@ -157,6 +166,13 @@ Token *tokenize(char *p) {
       continue;
     }
 
+    if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
+      cur = new_token(TK_KEYWORD, cur, p);
+      cur->len = 3;
+      p += 3;
+      continue;
+    }
+
     if (isalpha(*p)) {
       char *q = p;
       while (is_alnum(*p))
@@ -224,7 +240,9 @@ Node *stmt() {
 
   if (token->kind == TK_KEYWORD && equal(token, "if")) {
     token = token->next;
+    expect('(');
     Node *cond = expr();
+    expect(')');
     Node *then = stmt();
     Node *els = NULL;
     if (token->kind == TK_KEYWORD && equal(token, "else")) {
@@ -243,18 +261,25 @@ Node *stmt() {
     Node *cond = expr();
     expect(')');
 
-    char *brk = brk_label;
-    char *cont = cont_label;
-    brk_label = node->brk_label = new_unique_name();
-    cont_label = node->cont_label = new_unique_name();
+    // char *brk = brk_label;
+    // char *cont = cont_label;
 
     LVar *locals_backup = locals;
-    Node *body = stmt();
+    Node *then = stmt();
     locals = locals_backup;
 
-    node = new_node(ND_FOR, cond, body);
-    node->init = NULL;
-    node->inc = NULL;
+    node = new_node(ND_FOR, NULL, NULL);
+    // node->init = NULL;
+    // node->inc = NULL;
+    node->cond = cond;
+    node->then = then;
+
+    node->brk_label = new_unique_name();
+    node->cont_label = new_unique_name();
+
+    // brk_label = brk;
+    // cont_label = cont;
+
     return node;
   }
 
@@ -262,39 +287,67 @@ Node *stmt() {
     token = token->next;
     expect('(');
 
-    char *brk = brk_label;
-    char *cont = cont_label;
-    brk_label = node->brk_label = new_unique_name();
-    cont_label = node->cont_label = new_unique_name();
+    // char *brk = brk_label;
+    // char *cont = cont_label;
 
-    LVar *locals_backup = locals;
+    // LVar *locals_backup = locals;
 
     Node *init = NULL;
-    if (!equal(token, ";"))
+    if (!consume(";"))
       init = expr();
-    expect(')');
-
-    Node *cond = NULL;
-    if (!equal(token, ";"))
-      cond = expr();
-    expect(')');
-
-    Node *inc = NULL;
-    if (!equal(token, ";"))
-      inc = expr();
     expect(';');
 
-    Node *body = stmt();
-    node = new_node(ND_FOR, cond, body);
+    Node *cond = NULL;
+    if (!consume(";"))
+      cond = expr();
+    expect(';');
+
+    Node *inc = NULL;
+    if (!consume(")"))
+      inc = expr();
+    expect(')');
+
+    LVar *locals_backup = locals;
+    Node *then = stmt();
+    // node = new_node(ND_FOR, cond, then);
     locals = locals_backup;
 
-    node->init = init;
-    node->inc = inc;
-    node->brk_label = brk_label;
-    node->cont_label = cont_label;
+    node = new_node(ND_FOR, NULL, NULL);
 
-    brk_label = brk;
-    cont_label = cont;
+    node->init = init;
+    node->cond = cond;
+    node->inc = inc;
+    node->then = then;
+
+    node->brk_label = new_unique_name();
+    node->cont_label = new_unique_name();
+
+    // brk_label = brk;
+    // cont_label = cont;
+    return node;
+  }
+
+  if (equal(token, "{")) {
+    token = token->next;
+    Node **stmts = malloc(sizeof(Node *) * 100);
+    int len = 0;
+
+    while (!equal(token, "}")) {
+      stmts[len++] = stmt();
+    }
+    expect('}');
+
+    Node *node = new_node(ND_BLOCK, NULL, NULL);
+    node->body = stmts;
+    node->body_len = len;
+    return node;
+  }
+
+  if (equal(token, ";")) {
+    token = token->next;
+    Node *node = new_node(ND_BLOCK, NULL, NULL);
+    node->body = NULL;
+    node->body_len = 0;
     return node;
   }
 
@@ -326,14 +379,14 @@ Node *relational() {
   Node *node = add();
 
   for (;;) {
-    if (consume("<"))
-      node = new_node(ND_LT, node, add());
-    else if (consume("<="))
+    if (consume("<="))
       node = new_node(ND_LE, node, add());
-    else if (consume(">"))
-      node = new_node(ND_GT, node, add());
+    else if (consume("<"))
+      node = new_node(ND_LT, node, add());
     else if (consume(">="))
       node = new_node(ND_GE, node, add());
+    else if (consume(">"))
+      node = new_node(ND_GT, node, add());
     else
       return node;
   }

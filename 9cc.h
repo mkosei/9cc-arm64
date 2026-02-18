@@ -23,6 +23,7 @@ typedef enum {
   ND_RETURN,
   ND_IF,
   ND_FOR,
+  ND_BLOCK,
 } Nodekind;
 
 typedef struct Node Node;
@@ -35,9 +36,14 @@ struct Node {
   Node *els;
   Node *init;
   Node *inc;
-  Node *brk_label;
-  Node *cont_label;
-  //
+  Node *cond;
+  Node *then;
+
+  char *brk_label;
+  char *cont_label;
+  // block
+  Node **body;
+  int body_len;
   int val;
   int offset;
 };
@@ -87,7 +93,8 @@ Node *primary(void);
 Node *unary(void);
 
 Token *tokenize(char *p);
-void gen(Node *node);
+void gen_expr(Node *node);
+void gen_stmt(Node *node);
 void error(char *loc, char *fmt, ...);
 void program();
 
