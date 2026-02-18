@@ -97,5 +97,11 @@ void gen_expr(Node *node);
 void gen_stmt(Node *node);
 void error(char *loc, char *fmt, ...);
 void program();
+bool consume(const char *op);
+bool equal(Token *tok, const char *op);
+void expect(const char op);
+int expect_number();
+bool at_eof();
+Token *consume_ident();
 
 #endif
