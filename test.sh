@@ -16,17 +16,17 @@ assert() {
   fi
 }
 
-assert 8 "a=3; b=5; return a + b;"
-# if 文
-assert 1 "if (1) return 1; return 0;"
-assert 0 "if (0) return 1; return 0;"
+assert 3 "int main(){ return 3; }"
 
-# if-else 文
-assert 1 "if (1) return 1; else return 0;"
-assert 0 "if (0) return 1; else return 0;"
+assert 8 "int main(){ int a=3; int b=5; return a + b; }"
 
-#for-while　文
-assert 3 "i=0; while(i<3) i=i+1; return i;"
-assert 3 "for(i=0;i<3;i=i+1); return i;"
+assert 1 "int main(){ if (1) return 1; return 0; }"
+assert 0 "int main(){ if (0) return 1; return 0; }"
+
+assert 1 "int main(){ if (1) return 1; else return 0; }"
+assert 0 "int main(){ if (0) return 1; else return 0; }"
+
+assert 3 "int main(){ i=0; while(i<3) i=i+1; return i; }"
+assert 3 "int main(){ for(i=0;i<3;i=i+1); return i; }"
 
 echo OK

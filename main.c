@@ -4,7 +4,6 @@
 
 Token *token;
 char *user_input;
-Node *code[MAX_CODE];
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -14,7 +13,7 @@ int main(int argc, char **argv) {
 
   user_input = argv[1];
   token = tokenize(user_input);
-  program(); // code[] に文を格納
+  Obj *prog = program();
 
   printf(".globl _main\n");
   printf("_main:\n");
@@ -24,9 +23,8 @@ int main(int argc, char **argv) {
   printf("  mov x29, sp\n");
   printf("  sub sp, sp, #208\n");
 
-  for (int i = 0; code[i]; i++) {
-    gen_stmt(code[i]); // 文ごとに処理
-  }
+  for (Obj *fn = prog; fn; fn = fn->next)
+    gen_func(fn);
 
   // return 0 のエピローグ
   printf("  mov x0, #0\n");

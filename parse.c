@@ -1,5 +1,6 @@
 #include "9cc.h"
 #include <_stdio.h>
+#include <_string.h>
 #include <alloca.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -24,6 +25,24 @@ void error(char *loc, char *fmt, ...) {
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   exit(1);
+}
+
+int align_to(int n, int align) { return (n + align - 1) / align * align; }
+
+void expect_keyword(const char *kw) {
+  if (token->kind != TK_KEYWORD || !equal(token, kw))
+    error(token->str, "'%s'ではありません", kw);
+
+  token = token->next;
+}
+
+char *expect_ident() {
+  if (token->kind != TK_IDENT)
+    error(token->str, "識別子ではありません");
+
+  char *name = strndup(token->str, token->len);
+  token = token->next;
+  return name;
 }
 
 static char *new_unique_name(void) {
@@ -58,6 +77,37 @@ Node *new_node_num(int val) {
   return node;
 }
 
+Node *declaration() {
+  expect_keyword("int");
+
+  Token *tok = consume_ident();
+  if (!tok)
+    error(token->str, "変数名が必要");
+
+  LVar *lvar = calloc(1, sizeof(LVar));
+  lvar->name = tok->str;
+  lvar->len = tok->len;
+  lvar->next = locals;
+
+  lvar->offset = locals ? locals->offset + 8 : 8;
+  locals = lvar;
+
+  Node *node = new_node(ND_BLOCK, NULL, NULL);
+  node->body = NULL;
+  node->body_len = 0;
+
+  if (consume("=")) {
+    Node *lhs = calloc(1, sizeof(Node));
+    lhs->kind = ND_LVAR;
+    lhs->offset = lvar->offset;
+
+    node = new_node(ND_ASSIGN, lhs, expr());
+  }
+
+  expect(';');
+  return node;
+}
+
 Node *assign() {
   Node *node = equality();
   if (consume("="))
@@ -68,6 +118,8 @@ Node *assign() {
 Node *expr() { return assign(); }
 
 Node *stmt() {
+  if (token->kind == TK_KEYWORD && equal(token, "int"))
+    return declaration();
   Node *node;
   if (token->kind == TK_KEYWORD && equal(token, "return")) {
     token = token->next;
@@ -107,8 +159,6 @@ Node *stmt() {
     locals = locals_backup;
 
     node = new_node(ND_FOR, NULL, NULL);
-    // node->init = NULL;
-    // node->inc = NULL;
     node->cond = cond;
     node->then = then;
 
@@ -194,11 +244,50 @@ Node *stmt() {
   return node;
 }
 
-void program() {
-  int i = 0;
+Obj *function() {
+  locals = NULL;
+  expect_keyword("int");
+
+  char *name = expect_ident();
+
+  expect('(');
+  expect(')');
+
+  expect('{');
+
+  Node **stmts = calloc(100, sizeof(Node *));
+  int len = 0;
+
+  while (!equal(token, "}"))
+    stmts[len++] = stmt();
+
+  expect('}');
+
+  Node *body = new_node(ND_BLOCK, NULL, NULL);
+  body->body = stmts;
+  body->body_len = len;
+
+  Obj *fn = calloc(1, sizeof(Obj));
+  fn->name = name;
+  fn->body = body;
+  fn->locals = locals;
+  int max = 0;
+
+  for (LVar *var = locals; var; var = var->next)
+    if (max < var->offset)
+      max = var->offset;
+
+  fn->stack_size = align_to(max, 16);
+  return fn;
+}
+
+Obj *program() {
+  Obj head = {};
+  Obj *cur = &head;
   while (!at_eof())
-    code[i++] = stmt();
-  code[i] = NULL;
+    cur = cur->next = function();
+
+  return head.next;
 }
 
 Node *equality() {
@@ -263,6 +352,26 @@ Node *primary() {
 
   Token *tok = consume_ident();
   if (tok) {
+    if (consume("(")) {
+      Node *node = calloc(1, sizeof(Node));
+      node->kind = ND_FUNCALL;
+      node->funcname = strndup(tok->str, tok->len);
+
+      Node **args = malloc(sizeof(Node *) * 8);
+      int argc = 0;
+
+      if (!consume(")")) {
+        args[argc++] = expr();
+        while (consume(",")) {
+          args[argc++] = expr();
+        }
+        expect(')');
+      }
+      node->args = args;
+      node->argc = argc;
+      return node;
+    }
+
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
 

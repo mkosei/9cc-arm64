@@ -132,6 +132,13 @@ Token *tokenize(char *p) {
       p += 3;
       continue;
     }
+    // 　今はint型しかない
+    if (strncmp(p, "int", 3) == 0 && !is_alnum(p[3])) {
+      cur = new_token(TK_KEYWORD, cur, p);
+      cur->len = 3;
+      p += 3;
+      continue;
+    }
 
     if (isalpha(*p)) {
       char *q = p;

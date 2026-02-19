@@ -5,6 +5,21 @@
 static int label_idx = 0;
 static int count = 0;
 
+void gen_func(Obj *fn) {
+  printf(".globl %s\n", fn->name);
+  printf("%s:\n", fn->name);
+
+  printf("  stp x29, x30, [sp, #-16]!\n");
+  printf("  mov x29, sp\n");
+  printf("  sub sp, sp, #%d\n", fn->stack_size);
+
+  gen_stmt(fn->body);
+
+  printf("  mov sp, x29\n");
+  printf("  ldp x29, x30, [sp], #16\n");
+  printf("  ret\n");
+}
+
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR) {
     fprintf(stderr, "代入の左辺値が変数ではありません\n");
@@ -74,7 +89,7 @@ void gen_stmt(Node *node) {
 
   default:
     gen_expr(node);
-    printf("  ldr x0, [sp], #16\n");
+    printf("  add sp, sp, #16\n");
     return;
   }
 }
@@ -83,6 +98,20 @@ void gen_expr(Node *node) {
   switch (node->kind) {
   case ND_NUM:
     printf("  mov x0, #%d\n", node->val);
+    printf("  str x0, [sp, #-16]!\n");
+    return;
+
+  case ND_FUNCALL:
+    for (int i = node->argc - 1; i >= 0; i--)
+      gen_expr(node->args[i]);
+
+    for (int i = 0; i < node->argc; i++) {
+      printf("  ldr x%d, [sp], #16\n", i);
+    }
+
+    printf("  bl %s\n", node->funcname);
+
+    // 戻り値 push
     printf("  str x0, [sp, #-16]!\n");
     return;
 
