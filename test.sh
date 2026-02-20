@@ -19,6 +19,7 @@ assert() {
 assert 3 "int main(){ return 3; }"
 
 assert 8 "int main(){ int a=3; int b=5; return a + b; }"
+assert 3 "int main(){ int a=3; int b=&a; return *b; }"
 
 assert 1 "int main(){ if (1) return 1; return 0; }"
 assert 0 "int main(){ if (0) return 1; return 0; }"

@@ -122,6 +122,17 @@ void gen_expr(Node *node) {
     printf("  str x0, [sp, #-16]!\n");
     return;
 
+  case ND_ADDR:
+    gen_lval(node->lhs);
+    return;
+
+  case ND_DEREF:
+    gen_expr(node->lhs);
+    printf("  ldr x0, [sp], #16\n");
+    printf("  ldr x0, [x0]\n");
+    printf("  str x0, [sp, #-16]!\n");
+    return;
+
   case ND_ASSIGN:
     gen_expr(node->rhs);
     gen_lval(node->lhs);

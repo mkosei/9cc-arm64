@@ -76,6 +76,11 @@ Node *new_node_num(int val) {
   node->val = val;
   return node;
 }
+Node *new_unary(Nodekind kind, Node *expr) {
+  Node *node = calloc(1, sizeof(Node));
+  node->kind = kind;
+  node->lhs = expr;
+}
 
 Node *declaration() {
   expect_keyword("int");
@@ -404,5 +409,10 @@ Node *unary() {
     return primary();
   if (consume("-"))
     return new_node(ND_SUB, new_node_num(0), primary());
+  if (consume("&"))
+    return new_unary(ND_ADDR, unary());
+  if (consume("*"))
+    return new_unary(ND_DEREF, unary());
+
   return primary();
 }
